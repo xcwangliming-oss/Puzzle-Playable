@@ -42909,21 +42909,31 @@ function getConfiguredPlayableTutorialTarget() {
 
 function showPlayableTutorialGuide() {
   const config = (window as any).PLAYABLE_CONFIG;
-  if (config?.autoTutorial !== 'true') return;
+  if (config?.autoTutorial !== 'true' && config?.autoTutorial !== true) return;
 
   const removeExisting = () => {
     document.querySelectorAll('.playable-guide-overlay').forEach(el => el.remove());
   };
 
-  const install = () => {
+  const install = (attempt = 0) => {
     removeExisting();
-    if (!app) return;
+    if (!app) {
+      if (attempt < 20) window.setTimeout(() => install(attempt + 1), 100);
+      return;
+    }
     const canvasRect = (app.canvas as HTMLCanvasElement).getBoundingClientRect();
     // The export has already validated this move against the authored board.
     // Reuse it so viewport timing cannot make the guide disappear after load.
     const target = getConfiguredPlayableTutorialTarget() || getPlayableTutorialTarget();
-    if (!target) return;
+    if (!target) {
+      if (attempt < 20) window.setTimeout(() => install(attempt + 1), 100);
+      return;
+    }
     const targetRect = target ? getBlockScreenRect(target.block) : null;
+    if (!targetRect || canvasRect.width <= 0 || canvasRect.height <= 0) {
+      if (attempt < 20) window.setTimeout(() => install(attempt + 1), 100);
+      return;
+    }
     const dir = target?.dir || 1;
     const targetLength = target?.block?.length || 1;
     const scaleX = canvasRect.width / app.screen.width;
@@ -43046,7 +43056,7 @@ function showPlayableTutorialGuide() {
   // animation frame is dispatched (notably when opened from a local file).
   // Use the task queue instead of relying on two visual frames so a validated
   // export always mounts its guide after the authored board exists.
-  window.setTimeout(install, 0);
+  window.setTimeout(() => install(), 0);
 }
 
 

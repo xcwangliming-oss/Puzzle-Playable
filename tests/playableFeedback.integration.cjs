@@ -19,7 +19,7 @@ function buildPlayable(initialState) {
     const request = http.request({
       hostname: '127.0.0.1',
       port: PORT,
-      path: '/api/build-playable?filename=feedback-test.html',
+      path: '/api/build-playable?filename=feedback-test.html&autoTutorial=true',
       method: 'POST',
       headers: { 'content-type': 'application/json' },
     }, response => {
@@ -60,6 +60,8 @@ async function main() {
     audio: { muteVocals: false },
     currentLevel: 284,
     currentScore: 0,
+    tutorialMoveAvailable: true,
+    tutorialTarget: { blockId: 4, fromCol: 9, toCol: 10, row: 15, dir: 1, cells: 1, eliminationRow: 17, totalCleared: 1 },
     exportedBlockCount: 4,
     blocks: [
       block(1, 0, 16, 4, 'red'),
@@ -104,7 +106,19 @@ async function main() {
   });
   console.log('waiting for runtime initialization');
   await page.waitForFunction(() => window.__playableLoadedBlockCount === 4, null, { timeout: 30000 });
+  await page.waitForSelector('.playable-guide-overlay', { timeout: 30000 });
+  await page.waitForSelector('.playable-hand-cue', { timeout: 30000 });
+  await page.waitForSelector('.playable-hand-arrow', { timeout: 30000 });
   await page.waitForTimeout(400);
+
+  const headerLayout = await page.evaluate(() => {
+    const header = document.querySelector('#game-header').getBoundingClientRect();
+    const items = Array.from(document.querySelectorAll('#game-header .header-item')).map(item => item.getBoundingClientRect());
+    return { header: { left: header.left, width: header.width }, items: items.map(item => ({ left: item.left, width: item.width })) };
+  });
+  assert.equal(headerLayout.items.length, 2, 'playable header items are missing');
+  assert.ok(Math.abs((headerLayout.items[0].left + headerLayout.items[0].width / 2) - (headerLayout.header.left + headerLayout.header.width / 4)) < 2, 'level is not centered in the left header half');
+  assert.ok(Math.abs((headerLayout.items[1].left + headerLayout.items[1].width / 2) - (headerLayout.header.left + headerLayout.header.width * 0.75)) < 2, 'score is not centered in the right header half');
 
   const geometry = await page.evaluate(() => {
     const target = window.getBlocks().find(block => block.id === 4);
