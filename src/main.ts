@@ -48,7 +48,7 @@ import {
   pickTutorialEliminationMove,
 } from './boardMechanics.ts'
 import { getFailureOverlayMotion } from './failureOverlay.ts'
-import { getPlayableBlockLoadError } from './playableStateContract.ts'
+import { getPlayableBlockLength, getPlayableBlockLoadError } from './playableStateContract.ts'
 
 function showFailureImpact() {
   const overlay = document.getElementById('game-failure-overlay');
@@ -379,7 +379,7 @@ function getExportableCollectible() {
         id: Number(sb.id) || 0,
         col: Number(sb.col) || 0,
         row: Number(sb.row) || 0,
-        length: Math.max(1, Math.min(4, Number(sb.length) || 1)),
+        length: getPlayableBlockLength(sb.length, !!sb.isProp, PARAMS.gridCols),
         color: typeof sb.color === 'string' ? sb.color : 'red',
         noGravity: !!sb.noGravity,
         isCollectible: !!sb.isCollectible,
@@ -391,7 +391,7 @@ function getExportableCollectible() {
         spawnBlock(
             Number(sb.col) || 0,
             Number(sb.row) || 0,
-            Math.max(1, Math.min(4, Number(sb.length) || 1)),
+            getPlayableBlockLength(sb.length, !!sb.isProp, PARAMS.gridCols),
             typeof sb.color === 'string' ? sb.color : 'red',
             sb.id,
             sb.noGravity,

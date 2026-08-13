@@ -13,7 +13,7 @@ import {
   pickTutorialEliminationMove,
 } from '../src/boardMechanics.ts';
 import { getFailureOverlayMotion } from '../src/failureOverlay.ts';
-import { getPlayableBlockLoadError } from '../src/playableStateContract.ts';
+import { getPlayableBlockLength, getPlayableBlockLoadError } from '../src/playableStateContract.ts';
 
 assert.equal(normalizeBoardMechanic({ boardMechanic: 'scroll' }), 'scroll');
 assert.equal(normalizeBoardMechanic({ isFallingMode: true }), 'falling');
@@ -188,6 +188,22 @@ assert.equal(
   getPlayableBlockLoadError(12, 0),
   '试玩方块加载不完整：导出 12 个，实际加载 0 个。',
   'a blank playable must be rejected before it can be downloaded',
+);
+
+assert.equal(
+  getPlayableBlockLength(7, true, 11),
+  7,
+  'playable loading must preserve authored obstacle lengths beyond normal block limits',
+);
+assert.equal(
+  getPlayableBlockLength(7, false, 11),
+  4,
+  'normal playable blocks must retain their one-to-four-cell limit',
+);
+assert.equal(
+  getPlayableBlockLength(20, true, 11),
+  11,
+  'an imported obstacle must never exceed the playable board width',
 );
 
 console.log('boardMechanics tests passed');
