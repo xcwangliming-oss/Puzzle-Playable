@@ -18,6 +18,12 @@ const PLAYABLE_MAX_BYTES = 5 * 1024 * 1024;
 type ExportedState = {
   params?: { effectType?: string };
   shatterColor?: string;
+  collectible?: {
+    id?: string;
+    source?: string;
+    dataUrl?: string;
+    frames?: string[];
+  };
 };
 
 function toDataUrl(filePath: string): string {
@@ -35,6 +41,32 @@ function readFrameSequence(directory: string, filenames: string[]): string[] {
     }
     return toDataUrl(filePath);
   });
+}
+
+function getExportableCollectibleAsset(state: ExportedState): ExportedState['collectible'] | undefined {
+  const collectible = state.collectible;
+  if (!collectible) return undefined;
+
+  const readCollectibleAsset = (source: unknown): string => {
+    if (typeof source !== 'string' || source.length === 0) return '';
+    if (source.startsWith('data:')) return source;
+    if (!/^assets\/(coin\.png|coin2\/2_\d{2}\.png)$/.test(source)) return '';
+
+    const filePath = path.resolve('public', source);
+    return fs.existsSync(filePath) ? toDataUrl(filePath) : '';
+  };
+
+  const frames = Array.isArray(collectible.frames)
+    ? collectible.frames.map(readCollectibleAsset).filter(Boolean)
+    : [];
+  const dataUrl = readCollectibleAsset(collectible.dataUrl) || readCollectibleAsset(collectible.source);
+  if (!dataUrl && frames.length === 0) return undefined;
+
+  return {
+    id: collectible.id || 'coin',
+    dataUrl: dataUrl || frames[0],
+    frames,
+  };
 }
 
 function getSelectedOriginalEffectFrames(state: ExportedState): { type: string; sequences: Record<string, string[]> } | undefined {
@@ -120,6 +152,8 @@ function getPlayableTemplateStamp(): string {
     'assets/effects/playable-default',
     'assets/effects/highlight',
     'assets/effects/traditional',
+    'public/assets/coin.png',
+    'public/assets/coin2',
   ];
 
   return sourceFiles.map(file => {
@@ -211,6 +245,12 @@ export default defineConfig({
                     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
                     res.end(error instanceof Error ? error.message : String(error));
                     return;
+                  }
+
+                  const collectible = getExportableCollectibleAsset(parsedInitialState);
+                  if (collectible) {
+                    parsedInitialState.collectible = collectible;
+                    initialStateStr = JSON.stringify(parsedInitialState);
                   }
 
                   getPlayableTemplate().then(templateHtml => {

@@ -154,6 +154,25 @@ function getExportableShatterColor(): string {
     return selector?.value || 'default';
 }
 
+function getExportableCollectible() {
+    const activeId = String(activeCollectibleId);
+    const builtin = BUILTIN_COLLECTIBLES.find(item => item.id === activeId);
+    if (builtin) {
+        return {
+            id: builtin.id,
+            source: builtin.textureData,
+            frames: builtin.frames || [],
+        };
+    }
+
+    const custom = customCollectibles.find(item => String(item.id) === activeId);
+    if (custom) {
+        return { id: String(custom.id), dataUrl: custom.texture, frames: [] as string[] };
+    }
+
+    return { id: 'coin', source: BUILTIN_COLLECTIBLES[0].textureData, frames: [] as string[] };
+}
+
 (window as any).exportCurrentGameState = function() {
     const exportedBlocks = blocks.length > 0 ? blocks : initialBoardBlocks;
     const exportBoardMechanic = getActiveBoardMechanic();
@@ -210,7 +229,8 @@ function getExportableShatterColor(): string {
         boardMechanic: exportBoardMechanic,
         gameRule: exportGameRule,
         isCollectMode,
-        jewelTarget: parseInt(document.getElementById('jewel-collect-target-val')?.innerText || '0'),
+        collectedCount,
+        collectible: getExportableCollectible(),
         currentLevel: parseInt(document.getElementById('level-val')?.innerText || '284'),
         currentScore: parseInt(document.getElementById('score-val')?.innerText?.replace(/,/g, '') || '0'),
         background: {
@@ -276,6 +296,10 @@ function getExportableShatterColor(): string {
     isRainbowFixedMode = loadedGameRule === 'rainbow-fixed';
     isMaterialChangingMode = loadedGameRule === 'material';
     isNoGravityMode = loadedGameRule === 'no-gravity';
+    const savedCollectedCount = Number(saveData.collectedCount ?? savedModes.collectedCount ?? 0);
+    collectedCount = isCollectMode && Number.isFinite(savedCollectedCount)
+        ? Math.max(0, Math.floor(savedCollectedCount))
+        : 0;
 
     const savedBackground = saveData.background;
     if (savedBackground && typeof savedBackground.dataUrl === 'string') {
@@ -315,13 +339,6 @@ function getExportableShatterColor(): string {
     const scoreEl = document.getElementById('score-val');
     if (scoreEl && saveData.currentScore !== undefined) {
         scoreEl.innerText = saveData.currentScore.toString();
-    }
-    
-    if (isCollectMode) {
-        const hud = document.getElementById('jewel-collect-hud');
-        if (hud) hud.style.display = 'flex';
-        const targetVal = document.getElementById('jewel-collect-target-val');
-        if (targetVal && saveData.jewelTarget !== undefined) targetVal.innerText = saveData.jewelTarget.toString();
     }
     
     if (Array.isArray(saveData.holeMask)) {
@@ -413,6 +430,7 @@ function getExportableShatterColor(): string {
     }
     if (typeof drawBoardShapeBg === 'function') drawBoardShapeBg();
     if (typeof drawHoles === 'function') drawHoles();
+    updateHeaderUI();
 };
 
 
@@ -699,6 +717,8 @@ let collectedCount = 0;
 
 
 let activeCollectibleId: string | number = 'coin';
+
+let playableCollectibleDataUrl = '';
 
 
 
@@ -10137,6 +10157,8 @@ const BUILTIN_COLLECTIBLES: BuiltinCollectible[] = [
 
 function getActiveCollectibleBase64(): string {
 
+  if (playableCollectibleDataUrl) return playableCollectibleDataUrl;
+
 
 
   const activeIdStr = String(activeCollectibleId);
@@ -10175,6 +10197,33 @@ function getActiveCollectibleBase64(): string {
 
 
 
+}
+
+async function preloadStandaloneCollectible(collectible: any): Promise<void> {
+  if (!isStandalonePlayable || !collectible || typeof collectible !== 'object') return;
+
+  const dataUrl = typeof collectible.dataUrl === 'string' ? collectible.dataUrl : '';
+  const frameUrls = Array.isArray(collectible.frames)
+    ? collectible.frames.filter((frame: unknown): frame is string => typeof frame === 'string' && frame.startsWith('data:'))
+    : [];
+  if (!dataUrl && frameUrls.length === 0) return;
+
+  activeCollectibleId = typeof collectible.id === 'string' || typeof collectible.id === 'number'
+    ? collectible.id
+    : 'coin';
+  playableCollectibleDataUrl = dataUrl || frameUrls[0];
+
+  if (frameUrls.length > 0) {
+    activeCollectibleTextures = await Promise.all(frameUrls.map((frame: string) => PIXI.Assets.load<PIXI.Texture>(frame)));
+    activeCollectibleTexture = activeCollectibleTextures[0] || null;
+  } else {
+    activeCollectibleTexture = await PIXI.Assets.load<PIXI.Texture>(dataUrl);
+    activeCollectibleTextures = activeCollectibleTexture ? [activeCollectibleTexture] : [];
+  }
+
+  if (activeCollectibleTexture) {
+    PIXI.Assets.cache.set(`collectible-${activeCollectibleId}`, activeCollectibleTexture);
+  }
 }
 
 
@@ -17778,6 +17827,7 @@ async function init() {
   if ((window as any).PLAYABLE_CONFIG && (window as any).PLAYABLE_CONFIG.initialState) {
       try {
           const stateData = JSON.parse((window as any).PLAYABLE_CONFIG.initialState);
+          await preloadStandaloneCollectible(stateData.collectible);
           (window as any).loadPlayableState(stateData);
           (window as any).__playableLoadedBlockCount = blocks.length;
           if (app?.renderer && app?.stage) app.renderer.render(app.stage);
@@ -24107,26 +24157,8 @@ function checkEliminations() {
               ease: 'power2.inOut',
               onComplete: () => {
                  worldContainer.removeChild(coin);
-                 const targetElement = document.getElementById('jewel-collect-target-val');
-                 const nextTarget = getNextCollectionMissionTarget(
-                   targetElement ? Number.parseInt(targetElement.innerText, 10) : undefined,
-                 );
-
-                 // The playable editor no longer exposes the legacy jewel target UI.
-                 // Do not treat a missing target as zero and immediately complete a mission.
-                 if (nextTarget !== null && targetElement) {
-                   targetElement.innerText = String(nextTarget);
-                   if (nextTarget === 0) {
-                     const go = document.getElementById('game-over-text');
-                     if (go) {
-                       go.style.display = 'block';
-                       go.innerText = 'MISSION COMPLETE!';
-                       go.style.color = '#ffcc00';
-                     }
-                   }
-                 }
-                 
-                 // TRACK COLLECTS FOR PLAYABLE
+                 collectedCount += 1;
+                 updateHeaderUI();
                  playableCollects++;
                  if (typeof (window as any).checkPlayableLimits === 'function') (window as any).checkPlayableLimits();
               }

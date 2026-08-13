@@ -43,19 +43,22 @@ function buildPlayable(initialState) {
   });
 }
 
-function block(id, col, row, length, color) {
-  return { id, col, row, length, color, noGravity: false, isCollectible: false, isProp: false, propDir: 'left' };
+function block(id, col, row, length, color, isCollectible = false) {
+  return { id, col, row, length, color, noGravity: false, isCollectible, isProp: false, propDir: 'left' };
 }
 
 async function main() {
   const effectType = process.env.PLAYABLE_EFFECT_TYPE || 'default';
+  const collectionMode = process.env.PLAYABLE_GAME_RULE === 'collect';
   const state = {
     params: { gridCols: 11, totalRows: 18, viewportRows: 18, cellSize: 50, effectType, shatterMode: 2 },
     probs: { 1: 20, 2: 40, 3: 30, 4: 10 },
-    modes: { boardMechanic: 'fixed', boardAdvanceMode: 'fixed', gameRule: 'normal' },
+    modes: { boardMechanic: 'fixed', boardAdvanceMode: 'fixed', gameRule: collectionMode ? 'collect' : 'normal', isCollectMode: collectionMode },
     boardMechanic: 'fixed',
     boardAdvanceMode: 'fixed',
-    gameRule: 'normal',
+    gameRule: collectionMode ? 'collect' : 'normal',
+    isCollectMode: collectionMode,
+    collectible: { id: 'coin', source: 'assets/coin.png', frames: [] },
     background: { enabled: false, dataUrl: '', activeId: 'none' },
     audio: { muteVocals: false },
     currentLevel: 284,
@@ -67,13 +70,14 @@ async function main() {
       block(1, 0, 16, 4, 'red'),
       block(2, 4, 16, 4, 'green'),
       block(3, 8, 16, 2, 'blue'),
-      block(4, 9, 15, 1, 'yellow'),
+      block(4, 9, 15, 1, 'yellow', collectionMode),
     ],
   };
   console.log('building playable');
   const html = await buildPlayable(state);
   assert.match(html, /effectFrames/);
   assert.match(html, /data:audio/);
+  if (collectionMode) assert.match(html, /data:image\/png/);
 
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'puzzle-playable-feedback-'));
   const outputPath = path.join(outputDir, 'feedback-test.html');
@@ -109,6 +113,10 @@ async function main() {
   await page.waitForSelector('.playable-guide-overlay', { timeout: 30000 });
   await page.waitForSelector('.playable-hand-cue', { timeout: 30000 });
   await page.waitForSelector('.playable-hand-arrow', { timeout: 30000 });
+  if (collectionMode) {
+    await page.waitForSelector('#collectible-header-icon', { timeout: 30000 });
+    await page.waitForSelector('#collect-val', { timeout: 30000 });
+  }
   await page.waitForTimeout(400);
 
   const headerLayout = await page.evaluate(() => {
@@ -143,12 +151,13 @@ async function main() {
     stage.emit('pointermove', { global: { x: start.x + 40, y: start.y } });
     stage.emit('pointerup', { global: { x: start.x + 40, y: start.y } });
   });
-  await page.waitForTimeout(1800);
+  await page.waitForTimeout(collectionMode ? 2600 : 1800);
 
   const result = await page.evaluate(() => ({
     shatterCells: window.getLastShatterCellColors(),
     playedAudio: window.__playedAudioSources.map(source => source.slice(0, 24)),
     blockCount: window.getBlocksCount(),
+    collectCount: document.querySelector('#collect-val')?.textContent || '',
     blocks: window.getBlocks().map(block => ({ id: block.id, col: block.col, row: block.row, x: block.sprite.x, y: block.sprite.y })),
   }));
   await page.screenshot({ path: path.join(ROOT, 'codex_playable_feedback_integration.png'), fullPage: true });
@@ -169,6 +178,7 @@ async function main() {
   }
   assert.ok(result.shatterCells.length >= 11, 'full row did not trigger shatter frames');
   assert.ok(result.playedAudio.some(source => source.startsWith('data:audio')), 'playable did not request embedded audio playback');
+  if (collectionMode) assert.equal(result.collectCount, '1', 'collectible elimination did not update the collection counter');
   console.log(JSON.stringify(result));
 }
 
