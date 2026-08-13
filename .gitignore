@@ -34,6 +34,7 @@ dist-ssr
 dist_playable/
 temp_extract/
 .tmp-*/
+.tmp-*.txt
 tmp-cdp-*/
 codex_*.png
 codex_*.html
