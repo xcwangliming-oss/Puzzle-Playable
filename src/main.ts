@@ -15871,10 +15871,16 @@ async function preloadStandaloneSelectedShatterEffects() {
 
   const loadSequence = async (key: string) => {
     const sources = payload.sequences[key] || [];
-    return Promise.all(sources.map((src, index) => PIXI.Assets.load<PIXI.Texture>({
-      alias: `standalone_effect_${payload.type}_${key}_${index}`,
-      src,
-    })));
+    const aliases = sources.map((src, index) => {
+      const alias = `standalone_effect_${payload.type}_${key}_${index}`;
+      PIXI.Assets.add({ alias, src });
+      return alias;
+    });
+    if (aliases.length === 0) return [];
+    await PIXI.Assets.load(aliases);
+    return aliases
+      .map(alias => PIXI.Assets.get<PIXI.Texture>(alias))
+      .filter((texture): texture is PIXI.Texture => Boolean(texture));
   };
 
   if (payload.type === 'default') {
@@ -15897,6 +15903,19 @@ async function preloadStandaloneSelectedShatterEffects() {
       gemShatterTextures[color] = await loadSequence(key);
     }
     gemShatterPreloaded = true;
+  }
+
+  // Keeps exported-playable diagnostics independent from Pixi's private cache.
+  if (isStandalonePlayable) {
+    (window as any).getPlayableEffectAssetStatus = () => ({
+      type: payload.type,
+      left: shatterLeftTextures.length,
+      right: shatterRightTextures.length,
+      highlight: rainbowTextures.length,
+      traditional: traditionalTextures.length,
+      borderedGem: Object.fromEntries(Object.entries(borderedGemTextures).map(([color, textures]) => [color, textures.length])),
+      gemShatter: Object.fromEntries(Object.entries(gemShatterTextures).map(([color, textures]) => [color, textures.length])),
+    });
   }
 }
 
@@ -16922,6 +16941,9 @@ async function init() {
     }
     await PIXI.Assets.load(playableColors.flatMap(color => [1, 2, 3, 4].map(length => `${color}-${length}`)));
     assetsLoaded = true;
+    // The standalone file has no editor asset folders at runtime. Load the
+    // export-selected shatter frames here, before the authored board is shown.
+    await preloadStandaloneSelectedShatterEffects();
   } else {
   // Initialize DBs early in the background
 

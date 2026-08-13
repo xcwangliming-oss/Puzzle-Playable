@@ -117,6 +117,9 @@ function getPlayableTemplateStamp(): string {
     'assets/ui/jewel-hand.png',
     'assets/ui/jewel-arrow.png',
     'assets/playable-audio',
+    'assets/effects/playable-default',
+    'assets/effects/highlight',
+    'assets/effects/traditional',
   ];
 
   return sourceFiles.map(file => {
