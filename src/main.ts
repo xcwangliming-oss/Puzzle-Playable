@@ -173,6 +173,24 @@ function getExportableCollectible() {
     return { id: 'coin', source: BUILTIN_COLLECTIBLES[0].textureData, frames: [] as string[] };
 }
 
+function getExportablePropStyle() {
+    const candy = typeof customPropCandyImg?.src === 'string'
+        ? customPropCandyImg.src
+        : localStorage.getItem(PROP_STORAGE_CANDY) || '';
+    const machineFrames = customPropMachineFrames.filter(frame => typeof frame === 'string' && frame.startsWith('data:image/'));
+    const machineAttackFrames = customPropMachineAttackFrames.filter(frame => typeof frame === 'string' && frame.startsWith('data:image/'));
+
+    if (!candy.startsWith('data:image/') && machineFrames.length === 0 && machineAttackFrames.length === 0) {
+        return undefined;
+    }
+
+    return {
+        candy: candy.startsWith('data:image/') ? candy : '',
+        machineFrames,
+        machineAttackFrames,
+    };
+}
+
 (window as any).exportCurrentGameState = function() {
     const exportedBlocks = blocks.length > 0 ? blocks : initialBoardBlocks;
     const exportBoardMechanic = getActiveBoardMechanic();
@@ -231,6 +249,7 @@ function getExportableCollectible() {
         isCollectMode,
         collectedCount,
         collectible: getExportableCollectible(),
+        propStyle: getExportablePropStyle(),
         currentLevel: parseInt(document.getElementById('level-val')?.innerText || '284'),
         currentScore: parseInt(document.getElementById('score-val')?.innerText?.replace(/,/g, '') || '0'),
         background: {
@@ -10226,6 +10245,46 @@ async function preloadStandaloneCollectible(collectible: any): Promise<void> {
   }
 }
 
+function loadStandaloneImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('自定义道具图片无法加载'));
+    image.src = dataUrl;
+  });
+}
+
+async function preloadStandalonePropStyle(propStyle: any): Promise<void> {
+  if (!isStandalonePlayable || !propStyle || typeof propStyle !== 'object') return;
+
+  const candy = typeof propStyle.candy === 'string' && propStyle.candy.startsWith('data:image/')
+    ? propStyle.candy
+    : '';
+  const machineFrames = Array.isArray(propStyle.machineFrames)
+    ? propStyle.machineFrames.filter((frame: unknown): frame is string => typeof frame === 'string' && frame.startsWith('data:image/'))
+    : [];
+  const machineAttackFrames = Array.isArray(propStyle.machineAttackFrames)
+    ? propStyle.machineAttackFrames.filter((frame: unknown): frame is string => typeof frame === 'string' && frame.startsWith('data:image/'))
+    : [];
+
+  if (!candy && machineFrames.length === 0 && machineAttackFrames.length === 0) return;
+
+  const [candyImage, machineImage] = await Promise.all([
+    candy ? loadStandaloneImage(candy) : Promise.resolve(null),
+    machineFrames[0] ? loadStandaloneImage(machineFrames[0]) : Promise.resolve(null),
+  ]);
+
+  customPropCandyImg = candyImage;
+  customPropMachineImg = machineImage;
+  customPropMachineFrames = machineFrames;
+  customPropMachineAttackFrames = machineAttackFrames;
+  machineIdleTextures.forEach(texture => texture.destroy(true));
+  machineAttackTextures.forEach(texture => texture.destroy(true));
+  machineIdleTextures = machineFrames.map((frame: string) => PIXI.Texture.from(frame));
+  machineAttackTextures = machineAttackFrames.map((frame: string) => PIXI.Texture.from(frame));
+  invalidatePropCache();
+}
+
 
 
 
@@ -17828,6 +17887,7 @@ async function init() {
       try {
           const stateData = JSON.parse((window as any).PLAYABLE_CONFIG.initialState);
           await preloadStandaloneCollectible(stateData.collectible);
+          await preloadStandalonePropStyle(stateData.propStyle);
           (window as any).loadPlayableState(stateData);
           (window as any).__playableLoadedBlockCount = blocks.length;
           if (app?.renderer && app?.stage) app.renderer.render(app.stage);

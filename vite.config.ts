@@ -24,6 +24,11 @@ type ExportedState = {
     dataUrl?: string;
     frames?: string[];
   };
+  propStyle?: {
+    candy?: string;
+    machineFrames?: string[];
+    machineAttackFrames?: string[];
+  };
 };
 
 function toDataUrl(filePath: string): string {
@@ -67,6 +72,24 @@ function getExportableCollectibleAsset(state: ExportedState): ExportedState['col
     dataUrl: dataUrl || frames[0],
     frames,
   };
+}
+
+function getExportablePropStyle(state: ExportedState): ExportedState['propStyle'] | undefined {
+  const propStyle = state.propStyle;
+  if (!propStyle) return undefined;
+
+  const image = (value: unknown): string => (
+    typeof value === 'string' && value.startsWith('data:image/') ? value : ''
+  );
+  const frames = (value: unknown): string[] => (
+    Array.isArray(value) ? value.map(image).filter(Boolean) : []
+  );
+  const candy = image(propStyle.candy);
+  const machineFrames = frames(propStyle.machineFrames);
+  const machineAttackFrames = frames(propStyle.machineAttackFrames);
+  if (!candy && machineFrames.length === 0 && machineAttackFrames.length === 0) return undefined;
+
+  return { candy, machineFrames, machineAttackFrames };
 }
 
 function getSelectedOriginalEffectFrames(state: ExportedState): { type: string; sequences: Record<string, string[]> } | undefined {
@@ -250,8 +273,11 @@ export default defineConfig({
                   const collectible = getExportableCollectibleAsset(parsedInitialState);
                   if (collectible) {
                     parsedInitialState.collectible = collectible;
-                    initialStateStr = JSON.stringify(parsedInitialState);
                   }
+
+                  const propStyle = getExportablePropStyle(parsedInitialState);
+                  if (propStyle) parsedInitialState.propStyle = propStyle;
+                  initialStateStr = JSON.stringify(parsedInitialState);
 
                   getPlayableTemplate().then(templateHtml => {
                     let html = templateHtml;

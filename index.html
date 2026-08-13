@@ -809,10 +809,14 @@
             cleanup();
             resolve();
           };
-          const timeout = window.setTimeout(() => {
+          const pendingTimeout = window.setTimeout(() => {
             previewLoading.textContent = '试玩仍在初始化，请稍候...';
             statusText.innerText = '正在加载试玩，请稍候...';
           }, 15000);
+          const failureTimeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error('试玩初始化超时。请检查上传的道具图片是否过大，或恢复默认道具样式后重试。'));
+          }, 30000);
           const onMessage = (event) => {
             if (event.source !== previewFrame.contentWindow) return;
             if (event.data?.type === readyType) {
@@ -828,7 +832,8 @@
             }
           };
           const cleanup = () => {
-            window.clearTimeout(timeout);
+            window.clearTimeout(pendingTimeout);
+            window.clearTimeout(failureTimeout);
             window.removeEventListener('message', onMessage);
           };
           window.addEventListener('message', onMessage);
