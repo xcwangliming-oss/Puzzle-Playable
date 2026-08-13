@@ -1,0 +1,65 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary recordings
+*.mov
+*.webm
+*.mp4
+.vercel
+*.zip
+
+# Local playable exports, browser diagnostics, and one-off investigation files
+dist_playable/
+temp_extract/
+.tmp-*/
+tmp-cdp-*/
+codex_*.png
+codex_*.html
+dev-*.log
+preview-*.log
+playable-dev-*.log
+*.tar.gz
+temp_*.mov
+temp_*.webm
+*.invalid-*/
+
+# One-off local debugging helpers; application code lives in src/, server/, and tests/
+add_*.py
+append_*.py
+check_*.py
+compare*.py
+copy_assets.py
+find_*.py
+fix_*.py
+get_*.py
+patch_*.py
+show_*.py
+update.py
+verify*.py
+test.cjs
+prop_title.txt
+deploy.sh
+rename.cjs
+

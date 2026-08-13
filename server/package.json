@@ -1,0 +1,12 @@
+{
+  "name": "puzzle-converter-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node convert-server.mjs"
+  },
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "fluent-ffmpeg": "^2.1.3"
+  }
+}

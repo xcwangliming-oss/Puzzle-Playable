@@ -1,0 +1,924 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Block Puzzle Editor 2.0</title>
+    <script type="module" src="/src/main.ts"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        if (window.PLAYABLE_CONFIG) {
+          document.documentElement.classList.add('is-playable-root');
+          document.body.classList.add('is-playable');
+        }
+      });
+    </script>
+    <style>
+      body.is-playable #top-navbar,
+      body.is-playable #material-panel,
+      body.is-playable #editor-panel,
+      body.is-playable #playable-export-column,
+      body.is-playable #bottom-menu {
+        display: none !important;
+      }
+      html.is-playable-root,
+      body.is-playable {
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden !important;
+      }
+      body.is-playable #tab-level {
+        padding-top: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        height: 100dvh !important;
+        margin: 0 !important;
+      }
+      body.is-playable {
+        background: transparent !important;
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        touch-action: none;
+        overscroll-behavior: none;
+        margin: 0;
+        padding: 0;
+      }
+      body.is-playable #game-ui {
+        width: min(100vw, calc(100vh * 9 / 16)) !important;
+        width: min(100vw, calc(100dvh * 9 / 16)) !important;
+        height: min(100vh, calc(100vw * 16 / 9)) !important;
+        height: min(100dvh, calc(100vw * 16 / 9)) !important;
+        max-width: none !important;
+        max-height: none !important;
+        min-height: 0 !important;
+        flex: 0 0 auto !important;
+        display: block !important;
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
+      }
+      body.is-playable #main-layout,
+      body.is-playable #canvas-container {
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        display: block !important;
+        background: transparent !important;
+      }
+      body.is-playable #board-wrapper {
+        width: 100% !important;
+        height: 100% !important;
+        max-width: none !important;
+        max-height: none !important;
+        aspect-ratio: 9 / 16 !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+      }
+      body.is-playable #game-header {
+        box-sizing: border-box !important;
+        display: grid !important;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+        justify-content: stretch !important;
+        gap: 2px !important;
+        padding: 0 4px !important;
+        text-align: center !important;
+      }
+      body.is-playable .header-item {
+        min-width: 0 !important;
+        overflow: hidden !important;
+        text-overflow: clip !important;
+        white-space: nowrap !important;
+        font-size: clamp(18px, 5vw, 30px) !important;
+        line-height: 1 !important;
+        text-align: center !important;
+      }
+      #playable-cta-button {
+        display: none;
+      }
+      body.is-playable #playable-cta-button {
+        display: block;
+        position: absolute;
+        left: 50%;
+        bottom: 1.7%;
+        transform: translateX(-50%);
+        z-index: 5;
+        width: min(21vw, 100px);
+        aspect-ratio: 1440 / 580;
+        padding: 0;
+        border: none;
+        background: url('/assets/ui/free-to-play.png') center / contain no-repeat;
+        color: transparent;
+        font-size: 0;
+        text-shadow: none;
+        box-shadow: none;
+        cursor: pointer;
+      }
+      #tab-level {
+        position: relative;
+      }
+      body:not(.is-playable) #top-navbar {
+        display: none !important;
+      }
+      body:not(.is-playable) #tab-level {
+        display: grid !important;
+        grid-template-columns: 300px 800px 300px 320px !important;
+        gap: 20px !important;
+        justify-content: center !important;
+        align-items: start !important;
+        padding-top: 15px !important;
+        box-sizing: border-box !important;
+      }
+      body:not(.is-playable) #material-panel {
+        grid-column: 1 !important;
+        width: 300px !important;
+        height: 960px !important;
+      }
+      body:not(.is-playable) #game-ui {
+        grid-column: 2 !important;
+      }
+      body:not(.is-playable) #editor-panel {
+        grid-column: 3 !important;
+        width: 300px !important;
+      }
+      #tab-level #playable-export-column {
+        grid-column: 4 !important;
+        position: static !important;
+        margin-left: 0 !important;
+        width: 320px !important;
+        height: 940px !important;
+        z-index: 15 !important;
+      }
+      #tab-level #playable-export-column #preview-container {
+        order: 2 !important;
+        width: 100% !important;
+        height: auto !important;
+        aspect-ratio: 9 / 16 !important;
+        margin-top: 0 !important;
+      }
+      #tab-level #playable-export-column #playable-export-actions {
+        order: 3 !important;
+        width: 100% !important;
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 8px !important;
+      }
+      #tab-level #playable-export-column #generate-status {
+        order: 4 !important;
+      }
+      #tab-level #playable-export-column #playable-export-actions button {
+        width: 100% !important;
+        min-height: 42px !important;
+      }
+      #tab-level #playable-export-column #btn-download-html:disabled {
+        background: #515363 !important;
+        color: #9ea0ad !important;
+        cursor: not-allowed !important;
+        box-shadow: none !important;
+        opacity: 0.75 !important;
+      }
+      #tab-level #playable-export-column #playable-settings-panel {
+        order: 1 !important;
+        position: static !important;
+        width: 100%;
+        height: 190px;
+        box-sizing: border-box !important;
+        flex: none !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        gap: 0 !important;
+        padding: 10px !important;
+        background: rgba(30, 30, 48, 0.92) !important;
+        border: 1px solid rgba(92, 94, 135, 0.75) !important;
+        border-radius: 8px !important;
+      }
+      #tab-level #playable-export-column #playable-settings-panel .record-bg-manager-title {
+        color: #a0a0b5 !important;
+        font-size: 12px !important;
+        margin: 0 0 8px 0 !important;
+        line-height: 1.2 !important;
+        font-weight: 700 !important;
+      }
+      #tab-level #playable-export-column #playable-settings-panel label,
+      #tab-level #playable-export-column #playable-settings-panel span {
+        font-size: 10px !important;
+      }
+      #tab-level #playable-export-column #playable-settings-panel input[type="text"],
+      #tab-level #playable-export-column #playable-settings-panel input[type="number"] {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 3px 5px !important;
+        font-size: 10px !important;
+        background: #0f1016 !important;
+        border: 1px solid #3f4052 !important;
+        color: #fff !important;
+        border-radius: 4px !important;
+        outline: none !important;
+      }
+      #tab-level #playable-export-column #playable-settings-panel .playable-setting-row {
+        display: grid !important;
+        grid-template-columns: 82px 1fr !important;
+        align-items: center !important;
+        gap: 8px !important;
+        margin-bottom: 7px !important;
+      }
+      #tab-level #playable-export-column #playable-settings-panel .playable-limit-grid {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 7px 8px !important;
+        margin-top: 6px !important;
+      }
+      #tab-level #playable-export-column #playable-settings-panel .playable-limit-field {
+        display: grid !important;
+        grid-template-columns: 1fr 52px !important;
+        align-items: center !important;
+        gap: 5px !important;
+      }
+      .playable-guide-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483600;
+        pointer-events: none;
+        overflow: hidden;
+      }
+      .playable-guide-focus {
+        position: fixed;
+        left: var(--guide-row-left);
+        top: var(--guide-row-top);
+        width: var(--guide-row-width);
+        height: var(--guide-row-height);
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+      }
+      .playable-guide-dim {
+        position: fixed;
+        left: 0;
+        right: 0;
+        background: rgba(0,0,0,0.58);
+        pointer-events: none;
+      }
+      .playable-guide-dim-top {
+        top: 0;
+        height: var(--guide-row-top);
+      }
+      .playable-guide-dim-bottom {
+        top: calc(var(--guide-row-top) + var(--guide-row-height));
+        bottom: 0;
+      }
+      .playable-hand-cue {
+        position: fixed;
+        left: var(--guide-x);
+        top: var(--guide-y);
+        width: var(--guide-hand-size);
+        height: var(--guide-hand-height);
+        z-index: 2147483604;
+        pointer-events: none;
+        animation: playable-hand-swipe 1.08s ease-in-out infinite;
+        filter: drop-shadow(0 8px 8px rgba(0,0,0,0.45));
+        background: center / contain no-repeat;
+        transform-origin: 48% 36%;
+      }
+      .playable-hand-cue::before {
+        content: none;
+      }
+      .playable-hand-cue::after {
+        content: none;
+      }
+      .playable-hand-arrow {
+        position: fixed;
+        left: var(--guide-arrow-x);
+        top: var(--guide-arrow-y);
+        width: var(--guide-arrow-size);
+        height: var(--guide-arrow-size);
+        z-index: 2147483603;
+        background: center / contain no-repeat;
+        opacity: 0.86;
+        filter: drop-shadow(0 0 8px rgba(255,210,80,0.7));
+        transform: rotate(var(--guide-arrow-rotation));
+        transform-origin: center center;
+        animation: playable-arrow-slide 1.18s cubic-bezier(0.22, 0.8, 0.28, 1) infinite;
+      }
+      .playable-hand-arrow::after {
+        content: none;
+      }
+      @keyframes playable-hand-swipe {
+        0% { transform: translate(0, 0) rotate(7deg) scale(1); }
+        18% { transform: translate(0, 0) rotate(7deg) scale(0.9); }
+        78% { transform: translate(var(--guide-dx), 0) rotate(7deg) scale(0.9); }
+        100% { transform: translate(0, 0) rotate(7deg) scale(1); }
+      }
+      @keyframes playable-arrow-slide {
+        0%, 18% { transform: translateX(0) rotate(var(--guide-arrow-rotation)); opacity: 0.68; }
+        52% { transform: translateX(var(--guide-arrow-dx)) rotate(var(--guide-arrow-rotation)); opacity: 0.94; }
+        78%, 100% { transform: translateX(0) rotate(var(--guide-arrow-rotation)); opacity: 0.72; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Top Navbar (Floating on top left) -->
+    <div id="top-navbar" style="position: absolute; top: 15px; left: 15px; display: flex; justify-content: flex-start; background: #1a1a25; padding: 10px 15px; border-radius: 8px; border: 1px solid #444; gap: 20px; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+      <button id="tab-btn-level" class="nav-tab active-tab" style="background: transparent; color: #fff; border: none; font-size: 15px; font-weight: bold; cursor: pointer; padding: 5px 10px; border-bottom: 2px solid #06d6a0;">❶ 牌面</button>
+      <button id="tab-btn-generate" class="nav-tab" style="display: none; background: transparent; color: #888; border: none; font-size: 15px; font-weight: bold; cursor: pointer; padding: 5px 10px; border-bottom: 2px solid transparent;">❷ 生成</button>
+    </div>
+
+    <!-- Tab 1: 牌面 -->
+    <div id="tab-level" style="display: flex; flex: 1; flex-direction: row; justify-content: center; align-items: center; gap: 20px; overflow: hidden; width: 100%; height: 100%;">
+      <!-- Editor Settings Panel (Left Side of Browser) -->
+    <div id="material-panel" style="display: flex; flex-direction: column; gap: 12px; height: 100%; overflow-y: auto; padding-top: 75px; padding-left: 5px; box-sizing: border-box;">
+      <div style="display: flex; flex-direction: column;">
+        <h3 style="margin-top: 5px; margin-bottom: 8px;">🎨 材质包管理</h3>
+        <div id="material-list" class="material-slots-container">
+          <!-- Dynamic list will be rendered here -->
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; border-top: 1px solid #444; padding-top: 10px;">
+        <h3 style="margin-top: 5px; margin-bottom: 8px;">🎁 收集物管理</h3>
+        <div id="collectible-list" class="material-slots-container">
+          <!-- Dynamic list will be rendered here -->
+        </div>
+      </div>
+
+      <div class="record-bg-panel material-bg-panel">
+        <div class="record-bg-controls" id="record-bg-controls">
+          <div class="record-bg-manager-title">背景图管理</div>
+          <input type="file" id="input-record-bg-file" accept="image/*" class="record-bg-file-input">
+          <div id="record-bg-list" class="record-bg-list"></div>
+          <div id="record-bg-status" class="record-bg-status">未启用背景图</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; border-top: 1px solid #444; padding-top: 10px;">
+        <h3 style="margin-top: 5px; margin-bottom: 8px;">🎵 音效包管理</h3>
+        <div id="sound-list" class="material-slots-container">
+          <!-- Dynamic list will be rendered here -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Game Phone UI -->
+    <div id="game-ui">
+      <!-- Main Content Area -->
+      <div id="main-layout">
+        <!-- Canvas Container -->
+        <div id="canvas-container">
+          <div id="board-wrapper">
+            <div id="game-header">
+              <div class="header-item">LEVEL: <span id="level-val">284</span></div>
+              <div class="header-item">SCORE: <span id="score-val">854,682</span></div>
+            </div>
+            <div id="board-clip"></div>
+            <!-- Canvas is inserted here via JS -->
+            <div id="game-failure-overlay" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; z-index:12; pointer-events:none; overflow:hidden;">
+              <img id="game-failure-icon" alt="" style="width:58%; max-width:330px; height:auto; filter:drop-shadow(0 15px 12px rgba(0, 0, 0, 0.55));">
+            </div>
+            <div id="game-over-text" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); font-size:48px; font-weight:900; color:#ff3366; text-shadow:0 0 20px rgba(255, 51, 102, 0.5); display:none; z-index:10; pointer-events:none;">GAME OVER</div>
+            <button id="playable-cta-button" type="button" onclick="window.triggerPlayableCTA && window.triggerPlayableCTA()">Free to play</button>
+          </div>
+        </div>
+
+        <!-- Side Menus (Game Controls) -->
+        <div id="bottom-menu" class="side-menu">
+          <button id="btn-random" class="menu-btn blue">
+            <span class="icon">↺</span>随机排面
+          </button>
+          <button id="btn-draw" class="menu-btn purple">
+            <span class="icon">✎</span>画排面
+          </button>
+          <button id="btn-manual" class="menu-btn pink">
+            <span class="icon">🧱</span>手动摆放
+          </button>
+          <button id="btn-play" class="menu-btn orange">
+            <span class="icon">▶</span>开始游戏
+          </button>
+          <button id="btn-board-editor" class="menu-btn purple">
+            <span class="icon">🏆</span>编辑棋盘
+          </button>
+          <div class="menu-section-title">玩法规则</div>
+          <button id="btn-normal-mode" class="menu-btn blue">
+            <span class="icon">🧱</span>普通玩法
+          </button>
+          <button id="btn-color-mode" class="menu-btn gray">
+            <span class="icon">🎨</span>变色模式
+          </button>
+          <button id="btn-single-color-mode" class="menu-btn gray">
+            <span class="icon">🎨</span>单色变色
+          </button>
+          <button id="btn-rainbow-mode" class="menu-btn gray">
+            <span class="icon">🌈</span>彩虹模式
+          </button>
+          <button id="btn-rainbow-fixed-mode" class="menu-btn gray">
+            <span class="icon">🎡</span>彩虹固定
+          </button>
+          <button id="btn-material-mode" class="menu-btn gray">
+            <span class="icon">💎</span>变材质模式
+          </button>
+          <button id="btn-collect-mode" class="menu-btn gray">
+            <span class="icon">🎁</span>收集模式
+          </button>
+          <button id="btn-nogravity-mode" class="menu-btn gray">
+            <span class="icon">🎈</span>无重力模式
+          </button>
+          <button id="btn-custom-twocolor-mode" class="menu-btn gray">
+            <span class="icon">🔮</span>自选双色
+          </button>
+          <div class="menu-section-title">牌面机制</div>
+          <button id="btn-fixed-mechanic" class="menu-btn gray wide">
+            <span class="icon">📌</span>固定牌面
+          </button>
+          <button id="btn-rising-mechanic" class="menu-btn blue wide">
+            <span class="icon">⬆</span>无限上升
+          </button>
+          <button id="btn-scroll-mechanic" class="menu-btn gray wide">
+            <span class="icon">↟</span>匀速滚动
+          </button>
+          <button id="btn-falling-mode" class="menu-btn gray wide">
+            <span class="icon">⬇</span>下落玩法
+          </button>
+          <div id="color-pair-selectors" class="color-selectors-panel">
+            <div class="color-dots-column" id="dots-color1">
+              <span class="color-dot red active" data-color="red"></span>
+              <span class="color-dot yellow" data-color="yellow"></span>
+              <span class="color-dot green" data-color="green"></span>
+              <span class="color-dot blue" data-color="blue"></span>
+              <span class="color-dot pink" data-color="pink"></span>
+            </div>
+            <div class="color-dots-column" id="dots-color2">
+              <span class="color-dot red" data-color="red"></span>
+              <span class="color-dot yellow active" data-color="yellow"></span>
+              <span class="color-dot green" data-color="green"></span>
+              <span class="color-dot blue" data-color="blue"></span>
+              <span class="color-dot pink" data-color="pink"></span>
+            </div>
+          </div>
+        </div>
+
+        <div id="draw-menu" class="side-menu hidden">
+          <div style="display:flex; flex-direction:column; gap:8px; margin-bottom: 10px;">
+            <div style="font-size: 11px; color: #a0a0b5; text-align: center; margin-bottom: 4px;">初始状态选择</div>
+            <button id="btn-draw-normal" class="menu-btn blue" style="padding: 8px; font-size: 12px; margin: 0;">🧱 普通模式</button>
+            <button id="btn-draw-nogravity" class="menu-btn gray" style="padding: 8px; font-size: 12px; margin: 0;">🎈 无重力模式</button>
+            <button id="btn-draw-collect" class="menu-btn gray" style="padding: 8px; font-size: 12px; margin: 0;">🎁 收集模式</button>
+          </div>
+          <button id="btn-generate" class="menu-btn green wide">✔ 完成画面</button>
+          <button id="btn-cancel" class="menu-btn gray wide">取消</button>
+        </div>
+
+        <div id="board-editor-menu" class="side-menu hidden">
+          <div style="font-weight: bold; font-size: 14px; margin-bottom: 8px; text-align: center; color: #fff;">🏆 棋盘形状编辑</div>
+          <div style="font-size: 11px; color: #a0a0b5; text-align: center; margin-bottom: 12px; line-height: 1.4;">
+            点击格子标记为不可用区域（红色），<br>再次点击取消。拖动可连续绘制。
+          </div>
+          <button id="btn-board-editor-done" class="menu-btn green wide" style="margin-bottom: 6px;">✔ 完成编辑</button>
+          <button id="btn-board-editor-clear" class="menu-btn orange wide" style="margin-bottom: 6px;">🗑 清空画布(空白)</button>
+          <button id="btn-board-editor-cancel" class="menu-btn gray wide">取消</button>
+        </div>
+
+        <div id="manual-menu" class="side-menu hidden" style="width: 190px;">
+          <div style="font-weight: bold; font-size: 16px; margin-bottom: 5px; text-align: center; color: #fff;">🧱 手动摆放</div>
+          <div style="font-size: 11px; color: #a0a0b5; text-align: center; margin-bottom: 12px; line-height: 1.4;">
+            在网格中点击进行摆放；点击已有方块可删除。
+          </div>
+          
+          <div style="display:flex; flex-direction:row; gap:6px; margin-bottom: 10px;">
+            <button id="btn-manual-normal" class="menu-btn blue" style="flex:1; padding: 6px 4px; font-size: 11px; margin: 0;">🧱 普通</button>
+            <button id="btn-manual-nogravity" class="menu-btn gray" style="flex:1; padding: 6px 4px; font-size: 11px; margin: 0;">🎈 无重力</button>
+            <button id="btn-manual-collect" class="menu-btn gray" style="flex:1; padding: 6px 4px; font-size: 11px; margin: 0;">🎁 收集</button>
+          </div>
+
+          <div id="manual-block-palette" style="display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; padding-right: 5px;">
+            <!-- Block palette rows will be generated via JavaScript -->
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+            <button id="btn-manual-clear" class="menu-btn gray" style="padding: 10px; font-size: 13px; width: 100%; flex-direction: row; gap: 5px;">
+              <span class="icon" style="margin-bottom:0;">🗑️</span>清空画布
+            </button>
+            <button id="btn-manual-generate" class="menu-btn green" style="padding: 12px; font-size: 14px; width: 100%; flex-direction: row; gap: 5px;">
+              ✔ 完成摆放
+            </button>
+            <button id="btn-manual-cancel" class="menu-btn gray" style="padding: 10px; font-size: 13px; width: 100%; flex-direction: row; gap: 5px;">
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor Settings Panel (Right Side of Browser) -->
+    <div id="editor-panel">
+
+      <div class="settings-section">
+        <h4>镜头与尺寸配置</h4>
+        <div class="visual-config-grid">
+          <div class="vc-item"><label>列数</label><span class="vc-val" id="val-cols">11</span><input type="range" id="slider-cols" min="4" max="30" value="11"></div>
+          <div class="vc-item"><label>行数</label><span class="vc-val" id="val-vprows">18</span><input type="range" id="slider-vprows" min="6" max="60" value="18"></div>
+          <div class="vc-item"><label>总行</label><span class="vc-val" id="val-rows">18</span><input type="range" id="slider-rows" min="10" max="200" value="18"></div>
+          <div class="vc-item"><label>格高</label><span class="vc-val" id="val-cellsize">50</span><input type="range" id="slider-cellsize" min="20" max="100" value="50"></div>
+          <div class="vc-item"><label>速度</label><span class="vc-val" id="val-speed">20</span><input type="range" id="slider-speed" min="10" max="300" value="20"></div>
+          <div class="vc-item"><label>Level</label><span class="vc-val" id="val-level">284</span><input type="range" id="slider-level" min="1" max="999" value="284"></div>
+          <div class="vc-item"><label>分数</label><span class="vc-val" id="val-score">854682</span><input type="range" id="slider-score" min="0" max="9999999" value="854682" step="1000"></div>
+          <div class="vc-item" id="item-collect-container" style="display: none;"><label>收集数</label><span class="vc-val" id="val-collect">0</span><input type="range" id="slider-collect" min="0" max="100" value="0"></div>
+        </div>
+        <!-- Hidden inputs for backward compatibility -->
+        <input type="hidden" id="input-cols" value="11">
+        <input type="hidden" id="input-vprows" value="18">
+        <input type="hidden" id="input-rows" value="18">
+        <input type="hidden" id="input-cellsize" value="50">
+        <input type="hidden" id="input-speed" value="20">
+        <input type="hidden" id="input-level" value="284">
+        <input type="hidden" id="input-score" value="854682">
+        <input type="hidden" id="input-collect" value="0">
+        <div class="vc-toggles">
+          <label class="vc-toggle" title="开启后隐藏顶部的关卡与积分文案"><input type="checkbox" id="input-hidetext"><span>隐藏文案</span></label>
+          <label class="vc-toggle" title="开启后消除方块时不播放破碎动画"><input type="checkbox" id="input-hideshatter"><span>隐藏破碎</span></label>
+        </div>
+        <div class="vocal-controls">
+          <div id="voice-pack-group" role="group" aria-label="人声音效选择">
+            <button type="button" class="voice-pack-btn" data-voice-pack="male">男生音效</button>
+            <button type="button" class="voice-pack-btn" data-voice-pack="female">女生音效</button>
+          </div>
+          <label class="vc-toggle vocal-mute-toggle" title="开启后关闭消除时的人声激励词"><input type="checkbox" id="input-mutevocals"><span>关闭人声</span></label>
+        </div>
+        <div style="margin-top: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 11px; color: #ddd; white-space: nowrap;">破碎方式:</label>
+            <div class="shatter-mode-group" style="display: flex; gap: 4px; background: #1a1a25; padding: 2px; border-radius: 6px; border: 1px solid #444; flex: 1; justify-content: space-around;">
+              <button type="button" class="shatter-mode-btn active" data-mode="1" title="中间向两边扩散" style="flex: 1; border: none; background: #3b6bdc; color: white; padding: 4px 0; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; transition: all 0.1s;">↔️</button>
+              <button type="button" class="shatter-mode-btn" data-mode="2" title="同时消失" style="flex: 1; border: none; background: transparent; color: #aaa; padding: 4px 0; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; transition: all 0.1s;">⚡</button>
+              <button type="button" class="shatter-mode-btn" data-mode="3" title="从左往右" style="flex: 1; border: none; background: transparent; color: #aaa; padding: 4px 0; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; transition: all 0.1s;">➡️</button>
+              <button type="button" class="shatter-mode-btn" data-mode="4" title="从右往左" style="flex: 1; border: none; background: transparent; color: #aaa; padding: 4px 0; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; transition: all 0.1s;">⬅️</button>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <label style="font-size: 11px; color: #ddd; white-space: nowrap;">破碎颜色:</label>
+            <select id="select-shatter-color" style="flex: 1; background: #1a1a25; border: 1px solid #444; color: white; padding: 4px; border-radius: 6px; font-size: 12px; cursor: pointer; outline: none;">
+              <option value="default">默认 (跟随方块)</option>
+              <option value="multicolor">彩色破碎（方块本色）</option>
+              <option value="pink">粉色</option>
+              <option value="red">红色</option>
+              <option value="yellow">黄色</option>
+              <option value="green">绿色</option>
+              <option value="blue">蓝色</option>
+            </select>
+          </div>
+        </div>
+        <!-- 可视化特效类型卡片管理 -->
+        <div style="display: flex; flex-direction: column; border-top: 1px solid #444; padding-top: 6px; margin-top: 6px;">
+          <h4 style="margin: 0 0 4px 0; color: #a0a0b5; font-size: 12px;">✨ 特效类型管理</h4>
+          <div class="material-slots-container" style="gap: 4px;">
+            <!-- 默认特效 (原始破碎) -->
+            <div class="material-card effect-card active" data-type="default">
+              <div class="material-card-preview has-files" style="width: 32px; height: 32px;">
+                <div class="material-card-sound-icon" style="font-size: 12px;">💥</div>
+              </div>
+              <div class="material-card-label" style="font-size: 10px; margin-top: 2px;">原始破碎</div>
+            </div>
+            <!-- 包边宝石逐色破碎 -->
+            <div class="material-card effect-card" data-type="bordered-gem">
+              <div class="material-card-preview has-files" style="width: 32px; height: 32px;">
+                <div class="material-card-sound-icon" style="font-size: 12px;">💎</div>
+              </div>
+              <div class="material-card-label" style="font-size: 10px; margin-top: 2px;">包边宝石</div>
+            </div>
+            <!-- 高光特效 (blast消除) -->
+            <div class="material-card effect-card" data-type="highlight">
+              <div class="material-card-preview has-files" style="width: 32px; height: 32px;">
+                <div class="material-card-sound-icon" style="font-size: 12px;">⚡</div>
+              </div>
+              <div class="material-card-label" style="font-size: 10px; margin-top: 2px;">blast消除</div>
+            </div>
+            <!-- 宝石破碎 -->
+            <div class="material-card effect-card" data-type="gem-shatter">
+              <div class="material-card-preview has-files" style="width: 32px; height: 32px;">
+                <div class="material-card-sound-icon" style="font-size: 12px;">🌟</div>
+              </div>
+              <div class="material-card-label" style="font-size: 10px; margin-top: 2px;">宝石破碎</div>
+            </div>
+            <!-- 传统消除 -->
+            <div class="material-card effect-card" data-type="traditional">
+              <div class="material-card-preview has-files" style="width: 32px; height: 32px;">
+                <div class="material-card-sound-icon" style="font-size: 12px;">🌈</div>
+              </div>
+              <div class="material-card-label" style="font-size: 10px; margin-top: 2px;">传统消除</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top: 6px; border-top: 1px solid #444; padding-top: 8px;">
+          <button id="btn-shift-up" class="btn-apply" style="flex:1; padding: 5px 8px; font-size:11px; margin-top:0; background: #3b6bdc; font-weight: normal;">排面上移 ⬆️</button>
+          <button id="btn-shift-down" class="btn-apply" style="flex:1; padding: 5px 8px; font-size:11px; margin-top:0; background: #ff8c00; font-weight: normal;">排面下移 ⬇️</button>
+        </div>
+      </div>
+
+      <!-- 方块生成概率权重 -->
+      <div class="settings-section">
+        <div class="prob-row"><label>1格块权重:</label><input type="range" id="prob-1" min="0" max="100" value="20"><span id="val-1">20</span></div>
+        <div class="prob-row"><label>2格块权重:</label><input type="range" id="prob-2" min="0" max="100" value="40"><span id="val-2">40</span></div>
+        <div class="prob-row"><label>3格块权重:</label><input type="range" id="prob-3" min="0" max="100" value="30"><span id="val-3">30</span></div>
+        <div class="prob-row"><label>4格块权重:</label><input type="range" id="prob-4" min="0" max="100" value="10"><span id="val-4">10</span></div>
+      </div>
+      </div>
+
+      <div id="playable-export-column" style="display: flex; flex-direction: column; gap: 12px; width: 330px; height: 960px; flex-shrink: 0;">
+        <div id="preview-container" style="width: 100%; height: 830px; background: #05060a; border: 2px solid #333850; border-radius: 8px; overflow: hidden; display: grid; place-items: center; color: #777; box-shadow: 0 10px 30px rgba(0,0,0,0.35);">
+          <span id="preview-placeholder">点击“生成并预览”加载试玩</span>
+        </div>
+        <div id="playable-export-actions" style="display: grid; grid-template-columns: 1fr; gap: 8px;">
+          <button id="btn-generate-preview" style="background: #28c76f; color: white; border: none; padding: 10px 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; box-shadow: 0 4px 10px rgba(40, 199, 111, 0.3); transition: transform 0.1s;">🎮 生成并预览</button>
+          <button id="btn-download-html" disabled style="background: #515363; color: #9ea0ad; border: none; padding: 10px 8px; border-radius: 6px; font-weight: bold; cursor: not-allowed; font-size: 13px; box-shadow: none; transition: transform 0.1s;">⬇ 下载 HTML</button>
+        </div>
+        <div id="generate-status" style="min-height: 18px; font-size: 12px; color: #28c76f; display: none;">✅ 生成完成！</div>
+
+        <div id="playable-settings-panel" class="settings-section" style="display: flex; flex-direction: column;">
+          <div class="record-bg-manager-title">⚙️ 试玩专属设置</div>
+
+          <div class="playable-setting-row">
+            <label>文件名</label>
+            <input type="text" id="playable-filename" value="playable_ad.html">
+          </div>
+
+          <div class="playable-setting-row">
+            <label>自动引导</label>
+            <input type="checkbox" id="playable-auto-tutorial" checked style="justify-self: end; width: 14px; height: 14px;">
+          </div>
+
+          <div class="record-bg-manager-title" style="margin-top: 6px !important;">⛔ 跳出限制（空值默认20）</div>
+
+          <div class="playable-limit-grid">
+            <div class="playable-limit-field"><label>滑动</label><input type="number" id="limit-swipes" min="0" max="999" value="20" placeholder="20"></div>
+            <div class="playable-limit-field"><label>行数</label><input type="number" id="limit-rows" min="0" max="999" value="20" placeholder="20"></div>
+            <div class="playable-limit-field"><label>波次</label><input type="number" id="limit-combos" min="0" max="999" value="20" placeholder="20"></div>
+            <div class="playable-limit-field"><label>收集</label><input type="number" id="limit-collects" min="0" max="999" value="20" placeholder="20"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        // Tab Switching Logic
+        const tabLevel = document.getElementById('tab-level');
+        const tabGenerate = document.getElementById('tab-generate');
+        const btnLevel = document.getElementById('tab-btn-level');
+        const btnGenerate = document.getElementById('tab-btn-generate');
+
+        btnLevel?.addEventListener('click', () => {
+          tabLevel.style.display = 'flex';
+          if (tabGenerate) tabGenerate.style.display = 'none';
+          btnLevel.style.color = '#fff';
+          btnLevel.style.borderBottomColor = '#06d6a0';
+          if (btnGenerate) {
+            btnGenerate.style.color = '#888';
+            btnGenerate.style.borderBottomColor = 'transparent';
+          }
+        });
+
+        btnGenerate?.addEventListener('click', () => {
+          tabLevel.style.display = 'none';
+          if (tabGenerate) tabGenerate.style.display = 'flex';
+          btnGenerate.style.color = '#fff';
+          btnGenerate.style.borderBottomColor = '#06d6a0';
+          btnLevel.style.color = '#888';
+          btnLevel.style.borderBottomColor = 'transparent';
+        });
+
+        // Update slider values
+        ['limit-swipes', 'limit-rows', 'limit-combos', 'limit-collects'].forEach(id => {
+          const el = document.getElementById(id);
+          const valEl = document.getElementById('val-' + id);
+          if (el && valEl) {
+            el.addEventListener('input', (e) => {
+              valEl.innerText = e.target.value;
+            });
+          }
+        });
+        
+        // Generate Button Logic
+        const btnGenPreview = document.getElementById('btn-generate-preview');
+        const btnDownload = document.getElementById('btn-download-html');
+        const statusText = document.getElementById('generate-status');
+        const previewContainer = document.getElementById('preview-container');
+        const readLimitValue = (id) => {
+          const raw = document.getElementById(id)?.value;
+          const parsed = parseInt(raw, 10);
+          return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : '20';
+        };
+        
+        if (btnGenPreview) {
+          btnGenPreview.addEventListener('click', async () => {
+            const originalText = btnGenPreview.innerText;
+            btnGenPreview.innerText = '⏳ 生成中...';
+            btnGenPreview.disabled = true;
+            if (btnDownload) {
+              btnDownload.disabled = true;
+              btnDownload.style.background = '#515363';
+              btnDownload.style.color = '#9ea0ad';
+              btnDownload.style.cursor = 'not-allowed';
+              btnDownload.style.boxShadow = 'none';
+            }
+            statusText.style.display = 'block';
+            statusText.style.color = '#ffaa00';
+            statusText.innerText = '正在打包编译，请稍候...';
+            
+            try {
+              const filename = document.getElementById('playable-filename') ? document.getElementById('playable-filename').value : 'playable_ad.html';
+              const autoTutorial = document.getElementById('playable-auto-tutorial') ? document.getElementById('playable-auto-tutorial').checked : false;
+              const limitSwipes = readLimitValue('limit-swipes');
+              const limitRows = readLimitValue('limit-rows');
+              const limitCombos = readLimitValue('limit-combos');
+              const limitCollects = readLimitValue('limit-collects');
+
+              let initialState = '{}';
+              let exportedBlockCount = 0;
+              if (typeof window.exportCurrentGameState === 'function') {
+                  const exportedState = window.exportCurrentGameState();
+                  exportedBlockCount = Array.isArray(exportedState.blocks) ? exportedState.blocks.length : 0;
+                  window.__lastExportedBlockCount = exportedBlockCount;
+                  initialState = JSON.stringify(exportedState);
+              }
+
+              const query = new URLSearchParams({
+                filename,
+                autoTutorial: autoTutorial ? 'true' : 'false',
+                limitSwipes,
+                limitRows,
+                limitCombos,
+                limitCollects,
+                t: Date.now().toString()
+              });
+              const res = await fetch('/api/build-playable?' + query.toString(), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ initialState }),
+                  cache: 'no-store'
+              });
+              const html = await res.text();
+              if (!res.ok) throw new Error(html || 'Build failed');
+
+              const blob = new Blob([html], { type: 'text/html' });
+              const downloadUrl = URL.createObjectURL(blob);
+              if (window.__lastBuiltDownloadUrl) {
+                URL.revokeObjectURL(window.__lastBuiltDownloadUrl);
+              }
+              const safeFilename = filename.endsWith('.html') ? filename : filename + '.html';
+              const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+              statusText.style.color = '#28c76f';
+              statusText.innerText = '正在加载试玩，请稍候...';
+              
+              window.__lastBuiltBlob = blob;
+              window.__lastBuiltHtml = html;
+              window.__lastBuiltUrl = downloadUrl;
+              window.__lastBuiltDownloadUrl = downloadUrl;
+              window.__lastBuiltPreviewUrl = downloadUrl;
+              window.__lastBuiltFilename = safeFilename;
+
+              previewContainer.style.position = 'relative';
+              const previewFrame = document.createElement('iframe');
+              previewFrame.style.cssText = 'width:100%; height:100%; border:none; display:block;';
+              const previewLoading = document.createElement('div');
+              previewLoading.textContent = '试玩加载中...';
+              previewLoading.style.cssText = 'position:absolute; inset:0; z-index:2; display:grid; place-items:center; background:#05060a; color:#a8acc0; font-size:13px; pointer-events:none;';
+              previewContainer.replaceChildren(previewFrame, previewLoading);
+
+        await new Promise((resolve, reject) => {
+          const readyType = 'block-puzzle-playable-ready';
+          const errorType = 'block-puzzle-playable-error';
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve();
+          };
+          const timeout = window.setTimeout(() => {
+            previewLoading.textContent = '试玩仍在初始化，请稍候...';
+            statusText.innerText = '正在加载试玩，请稍候...';
+          }, 15000);
+          const onMessage = (event) => {
+            if (event.source !== previewFrame.contentWindow) return;
+            if (event.data?.type === readyType) {
+              if (event.data.blockCount !== exportedBlockCount) {
+                cleanup();
+                reject(new Error(`试玩方块加载不完整：导出 ${exportedBlockCount} 个，实际加载 ${event.data.blockCount ?? 0} 个。`));
+              } else {
+                finish();
+              }
+            } else if (event.data?.type === errorType) {
+              cleanup();
+              reject(new Error(event.data.message || '试玩初始化失败'));
+            }
+          };
+          const cleanup = () => {
+            window.clearTimeout(timeout);
+            window.removeEventListener('message', onMessage);
+          };
+          window.addEventListener('message', onMessage);
+          previewFrame.src = downloadUrl;
+        });
+
+              previewLoading.remove();
+              statusText.innerText = `✅ 生成完成！导出 ${exportedBlockCount} 个方块，大小 ${sizeMB} MB`;
+              if (btnDownload) {
+                btnDownload.disabled = false;
+                btnDownload.style.background = '#00cfe8';
+                btnDownload.style.color = 'white';
+                btnDownload.style.cursor = 'pointer';
+                btnDownload.style.boxShadow = '0 4px 10px rgba(0, 207, 232, 0.3)';
+              }
+            } catch(e) {
+              statusText.style.color = '#ea5455';
+              statusText.innerText = '❌ 生成失败: ' + e.message;
+            } finally {
+              btnGenPreview.innerText = originalText;
+              btnGenPreview.disabled = false;
+            }
+          });
+        }
+        
+        if (btnDownload) {
+          btnDownload.addEventListener('click', () => {
+            if (window.__lastBuiltHtml) {
+              const filename = document.getElementById('playable-filename') ? document.getElementById('playable-filename').value : 'playable_ad.html';
+              const a = document.createElement('a');
+              const downloadBlob = new Blob([window.__lastBuiltHtml], { type: 'text/html' });
+              const downloadUrl = URL.createObjectURL(downloadBlob);
+              a.href = downloadUrl;
+              a.download = filename.endsWith('.html') ? filename : filename + '.html';
+              a.click();
+              window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+            } else {
+              alert("请先点击生成并预览！");
+            }
+          });
+        }
+      });
+    </script>
+    <div id="dummy-removed-elements" style="display: none;">
+      <input id="input-save-name">
+      <button id="btn-save-slot"></button>
+      <select id="save-slot"></select>
+      <button id="btn-load-slot"></button>
+      <button id="btn-delete-slot"></button>
+      <button id="btn-export-layout"></button>
+      <button id="btn-import-layout"></button>
+      
+      <input id="input-fixed-save-name">
+      <button id="btn-fixed-save-slot"></button>
+      <select id="fixed-save-slot"></select>
+      <button id="btn-fixed-load-slot"></button>
+      <button id="btn-fixed-delete-slot"></button>
+      <button id="btn-fixed-export-layout"></button>
+      <button id="btn-fixed-import-layout"></button>
+      
+      <button id="btn-script-record"></button>
+      <button id="btn-script-play"></button>
+      <button id="btn-script-rising-play"></button>
+      <button id="btn-script-play-scroll"></button>
+      <select id="input-script-initial-pause"></select>
+      <button id="btn-script-reset"></button>
+      <button id="btn-script-clear"></button>
+      <input id="input-script-duration">
+      <input id="input-script-delay-slide">
+      <input id="input-script-delay-elim">
+      <input id="input-script-delay-step">
+      <input id="input-script-gravity-dur">
+      <input id="input-script-scroll-speed">
+      
+      <input id="input-autoplay-target-duration">
+      <input id="input-autoplay-timeout">
+      <input id="input-autoplay-max-non-elim">
+      <input id="input-autoplay-min-combo">
+      <select id="input-autoplay-first-elim-step"></select>
+      <input type="checkbox" id="input-autoplay-require-multi">
+      <button id="btn-autoplay-generate"></button>
+      <div id="autoplay-status"></div>
+      <div id="autogen-play-buttons"></div>
+      <button id="btn-autogen-play"></button>
+      <button id="btn-autogen-play-rising"></button>
+      <button id="btn-autogen-play-scroll"></button>
+      
+      <input id="input-script-save-name">
+      <button id="btn-script-save"></button>
+      <select id="select-script-save-slot"></select>
+      <button id="btn-script-load"></button>
+      <button id="btn-script-delete"></button>
+      <button id="btn-script-export"></button>
+      <button id="btn-script-import"></button>
+      <div id="script-step-list"></div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+node_modules
+dist
+*.zip
+*.mov
+*.webm
+*.mp4
+test.mov
+.vercel
