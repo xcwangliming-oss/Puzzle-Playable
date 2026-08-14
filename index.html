@@ -113,23 +113,32 @@
       #playable-cta-button {
         display: none;
       }
+      @keyframes playable-cta-breathe {
+        0%, 100% {
+          transform: translateX(-50%) scale(0.94);
+        }
+        50% {
+          transform: translateX(-50%) scale(1.06);
+        }
+      }
       body.is-playable #playable-cta-button {
         display: block;
         position: absolute;
         left: 50%;
-        bottom: 1.7%;
-        transform: translateX(-50%);
+        bottom: 15px;
         z-index: 5;
         width: min(21vw, 100px);
-        aspect-ratio: 1440 / 580;
+        aspect-ratio: 559 / 182;
         padding: 0;
         border: none;
-        background: url('/assets/ui/free-to-play.png') center / contain no-repeat;
+        background: url('/assets/ui/free-to-play.png') center / 100% 100% no-repeat;
         color: transparent;
         font-size: 0;
         text-shadow: none;
         box-shadow: none;
         cursor: pointer;
+        animation: playable-cta-breathe 1.8s ease-in-out infinite;
+        transform-origin: center;
       }
       #tab-level {
         position: relative;
@@ -645,7 +654,7 @@
         </div>
         <div id="playable-export-actions" style="display: grid; grid-template-columns: 1fr; gap: 8px;">
           <button id="btn-generate-preview" style="background: #28c76f; color: white; border: none; padding: 10px 8px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 13px; box-shadow: 0 4px 10px rgba(40, 199, 111, 0.3); transition: transform 0.1s;">🎮 生成并预览</button>
-          <button id="btn-download-html" disabled style="background: #515363; color: #9ea0ad; border: none; padding: 10px 8px; border-radius: 6px; font-weight: bold; cursor: not-allowed; font-size: 13px; box-shadow: none; transition: transform 0.1s;">⬇ 下载 HTML</button>
+          <button id="btn-download-html" disabled style="background: #515363; color: #9ea0ad; border: none; padding: 10px 8px; border-radius: 6px; font-weight: bold; cursor: not-allowed; font-size: 13px; box-shadow: none; transition: transform 0.1s;">⬇ 下载五渠道包 ZIP</button>
         </div>
         <div id="generate-status" style="min-height: 18px; font-size: 12px; color: #28c76f; display: none;">✅ 生成完成！</div>
 
@@ -717,6 +726,170 @@
         const btnDownload = document.getElementById('btn-download-html');
         const statusText = document.getElementById('generate-status');
         const previewContainer = document.getElementById('preview-container');
+        const PLAYABLE_CHANNELS = ['AppLovin', 'Facebook', 'Google', 'Moloco', 'Unity'];
+        const PLAYABLE_CHANNEL_MAX_BYTES = 5 * 1024 * 1024;
+        const PLAYABLE_STORE_URLS = {
+          android: 'https://play.google.com/store/apps/details?id=com.sportbrain.jewelpuzzle',
+          ios: 'https://apps.apple.com/app/jewel-sliding-block-puzzle/id1476678178'
+        };
+        const ZIP_CRC_TABLE = (() => {
+          const table = [];
+          for (let n = 0; n < 256; n += 1) {
+            let value = n;
+            for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+            table[n] = value >>> 0;
+          }
+          return table;
+        })();
+        const crc32 = (bytes) => {
+          let value = 0xffffffff;
+          for (let index = 0; index < bytes.length; index += 1) value = ZIP_CRC_TABLE[(value ^ bytes[index]) & 0xff] ^ (value >>> 8);
+          return (value ^ 0xffffffff) >>> 0;
+        };
+        const writeZip = (entries) => {
+          const encoder = new TextEncoder();
+          const chunks = [];
+          const centralDirectory = [];
+          let offset = 0;
+          for (const entry of entries) {
+            const nameBytes = encoder.encode(entry.name);
+            const local = new Uint8Array(30 + nameBytes.length);
+            const localView = new DataView(local.buffer);
+            localView.setUint32(0, 0x04034b50, true);
+            localView.setUint16(4, 20, true);
+            localView.setUint16(6, 0x0800, true);
+            localView.setUint16(8, entry.method, true);
+            localView.setUint32(14, entry.crc, true);
+            localView.setUint32(18, entry.data.length, true);
+            localView.setUint32(22, entry.uncompressedSize, true);
+            localView.setUint16(26, nameBytes.length, true);
+            local.set(nameBytes, 30);
+            chunks.push(local, entry.data);
+
+            const central = new Uint8Array(46 + nameBytes.length);
+            const centralView = new DataView(central.buffer);
+            centralView.setUint32(0, 0x02014b50, true);
+            centralView.setUint16(4, 20, true);
+            centralView.setUint16(6, 20, true);
+            centralView.setUint16(8, 0x0800, true);
+            centralView.setUint16(10, entry.method, true);
+            centralView.setUint32(16, entry.crc, true);
+            centralView.setUint32(20, entry.data.length, true);
+            centralView.setUint32(24, entry.uncompressedSize, true);
+            centralView.setUint16(28, nameBytes.length, true);
+            centralView.setUint32(42, offset, true);
+            central.set(nameBytes, 46);
+            centralDirectory.push(central);
+            offset += local.length + entry.data.length;
+          }
+          const centralSize = centralDirectory.reduce((total, item) => total + item.length, 0);
+          const end = new Uint8Array(22);
+          const endView = new DataView(end.buffer);
+          endView.setUint32(0, 0x06054b50, true);
+          endView.setUint16(8, entries.length, true);
+          endView.setUint16(10, entries.length, true);
+          endView.setUint32(12, centralSize, true);
+          endView.setUint32(16, offset, true);
+          const all = [...chunks, ...centralDirectory, end];
+          const output = new Uint8Array(all.reduce((total, item) => total + item.length, 0));
+          let cursor = 0;
+          for (const item of all) {
+            output.set(item, cursor);
+            cursor += item.length;
+          }
+          return output;
+        };
+        const zipFiles = async (files, compress) => {
+          const encoder = new TextEncoder();
+          const entries = [];
+          for (const file of files) {
+            const raw = typeof file.data === 'string' ? encoder.encode(file.data) : file.data;
+            const shouldCompress = Boolean(compress && typeof CompressionStream === 'function');
+            let data = raw;
+            if (shouldCompress) {
+              const stream = new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+              data = new Uint8Array(await new Response(stream).arrayBuffer());
+            }
+            entries.push({
+              name: file.name,
+              data,
+              method: shouldCompress ? 8 : 0,
+              crc: crc32(raw),
+              uncompressedSize: raw.length
+            });
+          }
+          return writeZip(entries);
+        };
+        const channelBridgeScript = (channel) => {
+          const payload = JSON.stringify({ channel, urls: PLAYABLE_STORE_URLS })
+            .replace(/</g, '\\u003c')
+            .replace(/>/g, '\\u003e')
+            .replace(/&/g, '\\u0026');
+          const closeScriptTag = String.fromCharCode(60, 47) + 'script>';
+          return `<script>(function(){var cfg=${payload};var ua=function(){return navigator.userAgent||navigator.vendor||'';};var isIOS=function(){return /iPad|iPhone|iPod/i.test(ua())||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);};var store=function(){return isIOS()?cfg.urls.ios:cfg.urls.android;};var fallback=function(){try{window.location.assign(store());}catch(e){try{window.open(store(),'_blank');}catch(_){}}};var sdkCta=function(url){try{var target=url||store();if(cfg.channel==='AppLovin'&&window.mraid&&typeof window.mraid.open==='function'){window.mraid.open(target);return true;}if((cfg.channel==='Facebook'||cfg.channel==='Moloco')&&window.FbPlayableAd&&typeof window.FbPlayableAd.onCTAClick==='function'){window.FbPlayableAd.onCTAClick();return true;}if(cfg.channel==='Google'&&window.ExitApi&&typeof window.ExitApi.exit==='function'){window.ExitApi.exit();return true;}if(cfg.channel==='Unity'&&window.mraid&&typeof window.mraid.open==='function'){window.mraid.open(target);return true;}}catch(e){}return false;};var cta=function(url){if(!sdkCta(url))fallback();};var previous=window.super_html||{};var previousReady=typeof previous.game_ready==='function'?previous.game_ready:null;window.super_html_channel=cfg.channel.toLowerCase();window.super_html=Object.assign({},previous,{download:function(url){cta(url);},game_ready:function(){if(previousReady){try{previousReady.call(window.super_html);}catch(e){}}try{if(cfg.channel==='Facebook'&&window.FbPlayableAd&&typeof window.FbPlayableAd.gameReady==='function')window.FbPlayableAd.gameReady();if(cfg.channel==='AppLovin'&&window.mraid&&typeof window.mraid.getState==='function')window.mraid.getState();}catch(e){}}});function install(){var current=window.triggerPlayableCTA;if(typeof current!=='function'||current.__channelBridge)return false;var wrapped=function(){cta();};wrapped.__channelBridge=true;window.triggerPlayableCTA=wrapped;window.super_html.game_ready();return true;}var attempts=0,timer=setInterval(function(){attempts+=1;if(install()||attempts>240)clearInterval(timer);},25);})();` + closeScriptTag;
+        };
+        const channelizePlayable = (html, channel) => {
+          const marker = `<!-- BLOCK_PUZZLE_CHANNEL:${channel} -->`;
+          if (html.includes(marker)) return html;
+          const bridge = channelBridgeScript(channel);
+          const googleExitApi = channel === 'Google'
+            ? '<script type="text/javascript" src="https://tpc.googlesyndication.com/pagead/gadgets/html5/api/exitapi.js">' + String.fromCharCode(60, 47) + 'script>'
+            : '';
+          const withHead = html.includes('<head>')
+            ? html.replace('<head>', '<head>\n' + marker + googleExitApi)
+            : html;
+          const bodyCloseTag = '</body>';
+          const bodyCloseIndex = withHead.lastIndexOf(bodyCloseTag);
+          return bodyCloseIndex >= 0
+            ? withHead.slice(0, bodyCloseIndex) + bridge + withHead.slice(bodyCloseIndex)
+            : withHead + bridge;
+        };
+        const splitFacebookPlayable = (html) => {
+          // Keep the closing tag out of the inline script source. Otherwise the
+          // HTML parser can terminate this script before the regex is parsed.
+          const closeScriptTag = String.fromCharCode(60, 47) + 'script>';
+          const configPattern = new RegExp(
+            '<script\\b[^>]*>\\s*window\\.PLAYABLE_CONFIG\\s*=\\s*([\\s\\S]*?);\\s*' + closeScriptTag,
+            'i',
+          );
+          const match = html.match(configPattern);
+          if (!match) throw new Error('Facebook 渠道封装失败：找不到试玩配置。');
+          return {
+            indexHtml: html.replace(configPattern, '<script src="res.js">' + closeScriptTag),
+            // Facebook requires a local res.js entry. Move only the serialized
+            // state there; keep the runtime scripts in index.html so they run
+            // exactly once instead of being duplicated in the archive.
+            resJs: `window.PLAYABLE_CONFIG = ${match[1]};`
+          };
+        };
+        const buildChannelArtifacts = async (baseHtml, rawName) => {
+          const safeName = (rawName || 'playable_ad').replace(/\.html$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'playable_ad';
+          const prefix = `BlockPuzzle_${safeName}_`;
+          const channelFileCode = { AppLovin: 'apl', Facebook: 'fb', Google: 'gg', Moloco: 'moloco', Unity: 'unt' };
+          const byChannel = Object.fromEntries(PLAYABLE_CHANNELS.map((channel) => [channel, channelizePlayable(baseHtml, channel)]));
+          const facebook = splitFacebookPlayable(byChannel.Facebook);
+          const facebookZip = await zipFiles([
+            { name: 'index.html', data: facebook.indexHtml },
+            { name: 'res.js', data: facebook.resJs }
+          ], true);
+          const googleZip = await zipFiles([{ name: 'index.html', data: byChannel.Google }], true);
+          const encoder = new TextEncoder();
+          const artifacts = [
+            { channel: 'AppLovin', name: prefix + channelFileCode.AppLovin + '.html', data: encoder.encode(byChannel.AppLovin) },
+            { channel: 'Facebook', name: prefix + channelFileCode.Facebook + '.zip', data: facebookZip },
+            { channel: 'Google', name: prefix + channelFileCode.Google + '.zip', data: googleZip },
+            { channel: 'Moloco', name: prefix + channelFileCode.Moloco + '.html', data: encoder.encode(byChannel.Moloco) },
+            { channel: 'Unity', name: prefix + channelFileCode.Unity + '.html', data: encoder.encode(byChannel.Unity) }
+          ];
+          const oversized = artifacts.filter((artifact) => artifact.data.length > PLAYABLE_CHANNEL_MAX_BYTES);
+          if (oversized.length) throw new Error(`${oversized.map((artifact) => artifact.channel).join('、')} 渠道文件超过 5 MB 限制。`);
+          return artifacts;
+        };
+        const buildChannelBundle = async (html, filename) => {
+          const artifacts = await buildChannelArtifacts(html, filename);
+          return { artifacts, zip: await zipFiles(artifacts, false) };
+        };
+        window.__buildChannelBundleForTest = buildChannelBundle;
         const readLimitValue = (id) => {
           const raw = document.getElementById(id)?.value;
           const parsed = parseInt(raw, 10);
@@ -860,18 +1033,43 @@
         }
         
         if (btnDownload) {
-          btnDownload.addEventListener('click', () => {
-            if (window.__lastBuiltHtml) {
-              const filename = document.getElementById('playable-filename') ? document.getElementById('playable-filename').value : 'playable_ad.html';
-              const a = document.createElement('a');
-              const downloadBlob = new Blob([window.__lastBuiltHtml], { type: 'text/html' });
-              const downloadUrl = URL.createObjectURL(downloadBlob);
-              a.href = downloadUrl;
-              a.download = filename.endsWith('.html') ? filename : filename + '.html';
-              a.click();
-              window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
-            } else {
+          btnDownload.addEventListener('click', async () => {
+            if (!window.__lastBuiltHtml || btnDownload.disabled) {
               alert("请先点击生成并预览！");
+              return;
+            }
+            const originalText = btnDownload.innerText;
+            btnDownload.disabled = true;
+            btnDownload.innerText = '⏳ 正在封装五渠道...';
+            btnDownload.style.background = '#515363';
+            btnDownload.style.color = '#9ea0ad';
+            btnDownload.style.cursor = 'not-allowed';
+            btnDownload.style.boxShadow = 'none';
+            statusText.style.display = 'block';
+            statusText.style.color = '#ffaa00';
+            statusText.innerText = '正在生成 AppLovin、Facebook、Google、Moloco、Unity 五个渠道文件...';
+            try {
+              const filename = document.getElementById('playable-filename') ? document.getElementById('playable-filename').value : 'playable_ad.html';
+              const bundle = await buildChannelBundle(window.__lastBuiltHtml, filename);
+              const bundleName = (filename || 'playable_ad').replace(/\\.html$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_') || 'playable_ad';
+              const url = URL.createObjectURL(new Blob([bundle.zip], { type: 'application/zip' }));
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `BlockPuzzle_${bundleName}_5Channels.zip`;
+              a.click();
+              window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+              statusText.style.color = '#28c76f';
+              statusText.innerText = '✅ 已下载五渠道包：3 个 HTML + 2 个渠道 ZIP';
+            } catch (error) {
+              statusText.style.color = '#ea5455';
+              statusText.innerText = '❌ 渠道包生成失败: ' + (error?.message || error);
+            } finally {
+              btnDownload.disabled = false;
+              btnDownload.innerText = originalText;
+              btnDownload.style.background = '#00cfe8';
+              btnDownload.style.color = 'white';
+              btnDownload.style.cursor = 'pointer';
+              btnDownload.style.boxShadow = '0 4px 10px rgba(0, 207, 232, 0.3)';
             }
           });
         }

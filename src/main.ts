@@ -6,6 +6,7 @@ import gsap from 'gsap'
 import failureImpactUrl from '../assets/failure-impact.webp'
 import jewelHandUrl from '../assets/ui/jewel-hand.png'
 import jewelArrowUrl from '../assets/ui/jewel-arrow.png'
+import freeToPlayUrl from '../assets/ui/free-to-play.png'
 import soundFallUrl from '../assets/playable-audio/fall.mp3'
 import soundSpawnUrl from '../assets/playable-audio/spawn.mp3'
 import soundCollectUrl from '../assets/playable-audio/collect.mp3'
@@ -15,7 +16,7 @@ import soundPropElimUrl from '../assets/audio/prop_elim.ogg'
 
 const playableBlockAssetsMap = import.meta.glob('../assets/playable-blocks/*.webp', { eager: true, import: 'default' }) as Record<string, string>;
 const isStandalonePlayable = Boolean((window as any).PLAYABLE_CONFIG);
-const PLAYABLE_IOS_STORE_URL = 'https://apps.apple.com/us/app/jewel-sliding-block-puzzle/id1476678178';
+const PLAYABLE_IOS_STORE_URL = 'https://apps.apple.com/app/jewel-sliding-block-puzzle/id1476678178';
 const PLAYABLE_ANDROID_STORE_URL = 'https://play.google.com/store/apps/details?id=com.sportbrain.jewelpuzzle';
 
 function openPlayableStore(): void {
@@ -30,6 +31,40 @@ function openPlayableStore(): void {
   }
 
   window.location.assign(targetUrl);
+}
+
+// Unity's MRAID container can load the document before it becomes viewable.
+// Keep the playable responsive to that lifecycle without affecting normal
+// browser previews, which do not expose MRAID.
+let playableMraidViewable = true;
+
+function setupPlayableMraidViewability(): void {
+  if (!isStandalonePlayable) return;
+
+  const mraid = (window as any).mraid;
+  if (!mraid || typeof mraid.getState !== 'function') return;
+
+  playableMraidViewable = false;
+
+  const syncViewability = (visible?: boolean) => {
+    playableMraidViewable = typeof visible === 'boolean'
+      ? visible
+      : typeof mraid.isViewable === 'function' && mraid.isViewable();
+    document.documentElement.dataset.mraidViewable = playableMraidViewable ? 'true' : 'false';
+  };
+
+  const bind = () => {
+    syncViewability();
+    if (typeof mraid.addEventListener === 'function') {
+      mraid.addEventListener('viewableChange', syncViewability);
+    }
+  };
+
+  if (mraid.getState() === 'loading' && typeof mraid.addEventListener === 'function') {
+    mraid.addEventListener('ready', bind);
+  } else {
+    bind();
+  }
 }
 
 import { damagePropForClearedRows, getPropOccupiedColumns, isValidPropLength } from './propRules.ts'
@@ -1520,6 +1555,47 @@ const preloadedMaterials = new Map<number, Record<string, PIXI.Texture>>();
 
 
 let preloadedMaterialIds: number[] = [];
+
+
+
+// User-provided texture data is persisted in IndexedDB. A malformed or
+// unreachable image must never keep the editor in its startup state forever.
+function loadAssetWithTimeout<T>(promise: Promise<T>, label: string, timeoutMs = 6000): Promise<T | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value: T | null) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = window.setTimeout(() => {
+      console.warn(`Asset load timed out and was skipped: ${label}`);
+      finish(null);
+    }, timeoutMs);
+
+    promise.then((value) => finish(value)).catch((error) => {
+      console.warn(`Asset load failed and was skipped: ${label}`, error);
+      finish(null);
+    });
+  });
+}
+
+function waitForInitialization<T>(promise: Promise<T>, label: string, timeoutMs = 4000): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      callback();
+    };
+    const timer = window.setTimeout(() => {
+      finish(() => reject(new Error(`${label} 初始化超时`)));
+    }, timeoutMs);
+    promise.then((value) => finish(() => resolve(value))).catch((error) => finish(() => reject(error)));
+  });
+}
 
 
 
@@ -3454,9 +3530,9 @@ async function preloadGemShatterEffects() {
       const idxStr = i.toString().padStart(5, '0');
       const filename = c === 'blue' ? `Armature_5_1_${idxStr}.png` : `${folderName}_${idxStr}.png`;
       const url = `assets/gem-shatter-new/${encodeURIComponent(folderName)}/${encodeURIComponent(filename)}`;
-      promises.push(PIXI.Assets.load(url).then(tex => {
-        gemShatterTextures[c][i - 1] = tex;
-      }).catch((e) => { console.log('Failed to load tex', url, e); }));
+      promises.push(loadAssetWithTimeout(PIXI.Assets.load<PIXI.Texture>(url), url).then((tex) => {
+        if (tex) gemShatterTextures[c][i - 1] = tex;
+      }));
     }
   }
   await Promise.all(promises);
@@ -3469,7 +3545,7 @@ async function preloadAllMaterials() {
 
 
 
-    const list = await materialDB.getAllMaterials();
+    const list = await waitForInitialization(materialDB.getAllMaterials(), '材质列表读取', 2000);
 
 
 
@@ -3561,14 +3637,11 @@ async function preloadAllMaterials() {
 
 
 
-                const lp = PIXI.Assets.load<PIXI.Texture>(base64Src).then(texture => {
-
-
-
-                  textureRecord[alias] = texture;
-
-
-
+                const lp = loadAssetWithTimeout(
+                  PIXI.Assets.load<PIXI.Texture>(base64Src),
+                  `material:${item.id}:${alias}`
+                ).then((texture) => {
+                  if (texture) textureRecord[alias] = texture;
                 });
 
 
@@ -9432,7 +9505,7 @@ async function renderMaterialList() {
 
 
 
-    const list = await materialDB.getAllMaterials();
+    const list = await waitForInitialization(materialDB.getAllMaterials(), '材质列表读取', 2000);
 
 
 
@@ -10599,7 +10672,7 @@ async function updateActiveCollectible() {
 
 
 
-      const customList = await collectibleDB.getAllCollectibles();
+      const customList = await waitForInitialization(collectibleDB.getAllCollectibles(), '收集物读取', 2000);
 
 
 
@@ -10787,7 +10860,7 @@ async function renderCollectibleList() {
 
 
 
-    customCollectibles = await collectibleDB.getAllCollectibles();
+    customCollectibles = await waitForInitialization(collectibleDB.getAllCollectibles(), '收集物列表读取', 2000);
 
 
 
@@ -12883,7 +12956,7 @@ async function renderSoundList() {
 
 
 
-    const list = await soundDB.getAllSounds();
+    const list = await waitForInitialization(soundDB.getAllSounds(), '音效列表读取', 2000);
 
 
 
@@ -13691,7 +13764,7 @@ async function renderEffectList() {
 
 
 
-    const list = await effectDB.getAllEffects();
+    const list = await waitForInitialization(effectDB.getAllEffects(), '特效列表读取', 2000);
 
 
 
@@ -15340,6 +15413,10 @@ function registerGameLoop() {
 
     lastGameLoopAt = now;
 
+    if (isStandalonePlayable && !playableMraidViewable) {
+      return;
+    }
+
 
 
 
@@ -16802,6 +16879,13 @@ function weightedRandomLength(maxAllowed: number): number {
 
 async function init() {
 
+  setupPlayableMraidViewability();
+
+  if (isStandalonePlayable) {
+    const cta = document.getElementById('playable-cta-button') as HTMLButtonElement | null;
+    if (cta) cta.style.backgroundImage = `url("${freeToPlayUrl}")`;
+  }
+
 
 
   app = new PIXI.Application();
@@ -17055,13 +17139,20 @@ async function init() {
   } else {
   // Initialize DBs early in the background
 
+  // Render built-in controls before touching IndexedDB. A stalled custom-pack
+  // request must not leave the editor panels or board in an empty state.
+  void renderMaterialList().catch((error) => console.warn('Initial material list render failed:', error));
+  void renderCollectibleList().catch((error) => console.warn('Initial collectible list render failed:', error));
+  void renderSoundList().catch((error) => console.warn('Initial sound list render failed:', error));
+  void renderEffectList().catch((error) => console.warn('Initial effect list render failed:', error));
+
 
 
   try {
 
 
 
-    await materialDB.init();
+    await waitForInitialization(materialDB.init(), '材质库');
 
 
 
@@ -17073,10 +17164,6 @@ async function init() {
       }
     }
 
-    await preloadAllMaterials();
-
-
-
     await renderMaterialList();
 
 
@@ -17085,11 +17172,31 @@ async function init() {
 
 
 
+    // Custom packs and the large gem-shatter sequences are optional editor
+    // resources. Render the editor first and hydrate them in the background.
+    // This keeps a bad upload from blanking the whole workspace.
+    void preloadAllMaterials().catch((error) => {
+      console.warn('Background material preload failed:', error);
+    });
+
+
+
   } catch (dbErr) {
 
 
 
     console.error('Failed to initialize MaterialDB:', dbErr);
+
+
+
+    // A blocked IndexedDB upgrade must not leave the editor without its
+    // built-in material card. renderMaterialList() safely falls back to it
+    // when the custom-material database is unavailable.
+    await renderMaterialList();
+
+
+
+    repairChineseUI();
 
 
 
@@ -17105,7 +17212,7 @@ async function init() {
 
 
 
-    await soundDB.init();
+    await waitForInitialization(soundDB.init(), '音效库');
 
 
 
@@ -17221,7 +17328,7 @@ async function init() {
 
 
 
-    await effectDB.init();
+    await waitForInitialization(effectDB.init(), '特效库');
 
 
 
@@ -17281,6 +17388,18 @@ async function init() {
 
 
 
+    await renderEffectList();
+
+
+
+    restoreDefaultEffects();
+
+
+
+    repairChineseUI();
+
+
+
   }
 
 
@@ -17293,7 +17412,7 @@ async function init() {
 
 
 
-    await collectibleDB.init();
+    await waitForInitialization(collectibleDB.init(), '收集物库');
 
 
 
@@ -17314,6 +17433,14 @@ async function init() {
 
 
     console.error('Failed to initialize CollectibleDB:', dbErr);
+
+
+
+    await renderCollectibleList();
+
+
+
+    repairChineseUI();
 
 
 
@@ -19574,11 +19701,37 @@ function loadCustomPropImages(): void {
 }
 
 function rebuildMachineTextures(): void {
-  machineIdleTextures.forEach(t => t.destroy(true));
-  machineAttackTextures.forEach(t => t.destroy(true));
-  machineIdleTextures = customPropMachineFrames.map(b64 => PIXI.Texture.from(b64));
-  machineAttackTextures = customPropMachineAttackFrames.map(b64 => PIXI.Texture.from(b64));
-  customPropMachineImg = machineIdleTextures.length > 0 ? (machineIdleTextures[0].baseTexture.resource as any).source as HTMLImageElement : null;
+  machineIdleTextures.forEach(t => t?.destroy?.(true));
+  machineAttackTextures.forEach(t => t?.destroy?.(true));
+
+  // Saved data URLs can be stale or still decoding when the editor is restored.
+  // A failed custom prop must fall back to the default prop, never stop app startup.
+  const createTexture = (source: string, label: string): PIXI.Texture | null => {
+    if (typeof source !== 'string' || source.length === 0) return null;
+    try {
+      const texture = PIXI.Texture.from(source);
+      if (!texture) {
+        console.warn(`Skipping unavailable custom ${label} texture.`);
+        return null;
+      }
+      return texture;
+    } catch (error) {
+      console.warn(`Skipping invalid custom ${label} texture.`, error);
+      return null;
+    }
+  };
+
+  machineIdleTextures = customPropMachineFrames
+    .map(source => createTexture(source, 'machine'))
+    .filter((texture): texture is PIXI.Texture => texture !== null);
+  machineAttackTextures = customPropMachineAttackFrames
+    .map(source => createTexture(source, 'machine attack'))
+    .filter((texture): texture is PIXI.Texture => texture !== null);
+
+  const firstTexture = machineIdleTextures[0] as any;
+  const resource = firstTexture?.baseTexture?.resource ?? firstTexture?.source?.resource;
+  const source = resource?.source ?? resource;
+  customPropMachineImg = source instanceof HTMLImageElement ? source : null;
 }
 
 function triggerMachineHeadAttack(): void {

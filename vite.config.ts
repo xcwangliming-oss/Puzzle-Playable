@@ -171,6 +171,7 @@ function getPlayableTemplateStamp(): string {
     'assets/failure-impact.webp',
     'assets/ui/jewel-hand.png',
     'assets/ui/jewel-arrow.png',
+    'assets/ui/free-to-play.png',
     'assets/playable-audio',
     'assets/effects/playable-default',
     'assets/effects/highlight',

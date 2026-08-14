@@ -42,7 +42,7 @@ assert.match(
 );
 assert.match(
   mainSource,
-  /const PLAYABLE_IOS_STORE_URL = 'https:\/\/apps\.apple\.com\/us\/app\/jewel-sliding-block-puzzle\/id1476678178';/,
+  /const PLAYABLE_IOS_STORE_URL = 'https:\/\/apps\.apple\.com\/app\/jewel-sliding-block-puzzle\/id1476678178';/,
   'The exported playable must own the configured Apple App Store destination.',
 );
 assert.match(
